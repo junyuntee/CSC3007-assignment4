@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        .selected {
+            stroke: red;
+            stroke-width: 5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="tooltip"></div>
+    <svg></svg>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <script>
+
+        let width = 800, height = 800;
+
+        let svg = d3.select("svg")
+            .attr("viewBox", "0 0 " + width + " " + height)
+
+        // Load external data
+        Promise.all([d3.json("links-sample.json"), d3.json("cases-sample.json")]).then(data => {
+
+            // Data preprocessing
+            data[0].forEach(e => {
+                e.source = e.infector;
+                e.target = e.infectee;
+            });
+
+            console.log(data[0]); //links
+            console.log(data[1]); //cases
+
+
+
+            let linkpath = svg.append("g")
+                .attr("id", "links")
+                .selectAll("path")
+                .data(data[0])
+                .enter()
+                .append("path")
+                .attr("marker-end", d => `url(${new URL(`#arrow-${d}`, location)})`)
+                .attr("fill", "none")
+                .attr("stroke", "black");
+
+            let node = svg.append("g")
+                .attr("id", "nodes")
+                .selectAll("circle")
+                .data(data[1])
+                .enter()
+                .append("circle")
+                .attr("r", 5)
+                .attr("fill", d => d.gender == 'female' ? 'pink' : 'steelblue')
+                .on("mouseover", (event, d) => {
+                    d3.select(".tooltip")
+                        .html("<div>Age: " + d.age + "<br/>Nationality: " + d.nationality + "<br/>Occupation: " + d.occupation + "<br/>Organization: " + d.organization + "<br/>Serology: " + d.serology + "<br/>Vaccinated: " + d.vaccinated + "</div>")
+                        // .text(`${d.properties.Name}`)
+                        .style("position", "absolute")
+                        .style("background", "#fff")
+                        .style("left", (event.pageX) + "px")
+                        .style("top", (event.pageY) + "px");
+
+                    let path = d3.select(event.currentTarget);
+                    path.classed("selected", true)
+                    // path.style("stroke", "red").style("stroke-width", 10);
+                })
+                .on("mouseout", (event, d) => {
+                    d3.select(".tooltip")
+                        .text("");
+
+                    let path = d3.select(event.currentTarget);
+                    path.classed("selected", false)
+
+                })
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+
+
+            // Per-type markers, as they don't inherit styles.
+            svg.append("defs").selectAll("marker")
+                .data(data[1])
+                .join("marker")
+                .attr("id", d => `arrow-${d}`)
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 18)
+                .attr("refY", 0)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("fill", "black")
+                .attr('d', 'M 0,-5 L 10 ,0 L 0,5');
+            // .attr("d", 'M0,-5L10,0L0,5');
+
+            let simulation = d3.forceSimulation()
+                .nodes(data[1])
+                .force("x", d3.forceX().strength(0.1).x(width / 2))
+                .force("y", d3.forceY().strength(0.1).y(height / 2))
+                .force("link", d3.forceLink(data[0])
+                    .id(d => d.id)
+                    .distance(50)
+                    .strength(0.5)
+                )
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("collide", d3.forceCollide().strength(0.1).radius(30))
+                .on("tick", d => {
+                    // var dx = d.target.x - d.source.x,
+                    //     dy = d.target.y - d.source.y,
+                    //     dr = Math.sqrt(dx * dx + dy * dy);
+                    // linkpath
+                    //     .attr("d", d => "M" + d.source.x + "," + d.source.y + " " + d.target.x + "," + d.target.y);
+                    linkpath
+                        .attr("d", d => "M" + d.source.x + "," + d.source.y + "A" + Math.sqrt((d.target.x - d.source.x) * (d.target.x - d.source.x) + (d.target.y - d.source.y) * (d.target.y - d.source.y)) + "," + Math.sqrt((d.target.x - d.source.x) * (d.target.x - d.source.x) + (d.target.y - d.source.y) * (d.target.y - d.source.y)) + " 0 0,1 " + d.target.x + "," + d.target.y);
+                    node
+                        .attr("cx", d => d.x)
+                        .attr("cy", d => d.y);
+
+                })
+
+
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+
+
+
+        })
+    </script>
+
+</body>
+
+</html>
